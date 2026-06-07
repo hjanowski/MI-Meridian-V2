@@ -179,7 +179,8 @@ export default function Layout({ children }) {
           {[
             { label: 'Home', active: false },
             { label: 'Goals', active: false },
-            { label: 'Data Management', active: true },
+            { label: 'Data Management', active: false },
+            { label: 'Planning', active: true },
             { label: 'Marketing Analytics', active: false },
             { label: 'Segment Intelligence', active: false },
             { label: 'Reports', active: false, hasChevron: true },
@@ -233,7 +234,7 @@ export default function Layout({ children }) {
           padding: '16px 0',
         }}>
           <div style={{ padding: '0 16px 12px', fontSize: 11, fontWeight: 700, color: '#706e6b', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-            Data Management
+            Planning
           </div>
 
           {sidebarItems.map((item) => {

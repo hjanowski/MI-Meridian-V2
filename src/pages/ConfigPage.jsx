@@ -122,6 +122,7 @@ export default function ConfigPage() {
   const [sourceMetrics, setSourceMetrics] = useState({});
   const [firstPartyObjects, setFirstPartyObjects] = useState({});
   const [firstPartyFields, setFirstPartyFields] = useState({});
+  const [totalConnectActive, setTotalConnectActive] = useState(false);
   const [totalConnectMetrics, setTotalConnectMetrics] = useState({});
   const [totalConnectEnabled, setTotalConnectEnabled] = useState({});
   const [revenuePerKPI, setRevenuePerKPI] = useState('');
@@ -364,7 +365,7 @@ export default function ConfigPage() {
                     checked={config.connectFirstParty}
                     onChange={(e) => updateConfig({ connectFirstParty: e.target.checked })}
                   />
-                  <span className="cosmos-toggle__slider" />
+                  <span className="cosmos-toggle__track" />
                 </label>
               </div>
 
@@ -383,7 +384,7 @@ export default function ConfigPage() {
                             checked={config.firstPartyChannels[channel.id]}
                             onChange={(e) => updateFirstPartyChannels({ [channel.id]: e.target.checked })}
                           />
-                          <span className="cosmos-toggle__slider" />
+                          <span className="cosmos-toggle__track" />
                         </label>
                       </div>
 
@@ -441,14 +442,14 @@ export default function ConfigPage() {
                 <label className="cosmos-toggle">
                   <input
                     type="checkbox"
-                    checked={config.dataFeed.thirdPartyType === 'totalconnect'}
-                    onChange={(e) => updateDataFeed({ thirdPartyType: e.target.checked ? 'totalconnect' : 'api' })}
+                    checked={totalConnectActive}
+                    onChange={(e) => setTotalConnectActive(e.target.checked)}
                   />
-                  <span className="cosmos-toggle__slider" />
+                  <span className="cosmos-toggle__track" />
                 </label>
               </div>
 
-              {config.dataFeed.thirdPartyType === 'totalconnect' && (
+              {totalConnectActive && (
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: '1rem' }}>
                   {TOTALCONNECT_SOURCES.map((source) => (
                     <div key={source.id} className="cosmos-card">
@@ -463,7 +464,7 @@ export default function ConfigPage() {
                             checked={!!totalConnectEnabled[source.id]}
                             onChange={(e) => setTotalConnectEnabled({ ...totalConnectEnabled, [source.id]: e.target.checked })}
                           />
-                          <span className="cosmos-toggle__slider" />
+                          <span className="cosmos-toggle__track" />
                         </label>
                       </div>
                       {totalConnectEnabled[source.id] && (
@@ -511,99 +512,112 @@ export default function ConfigPage() {
                 >
                   <option value="revenue">Revenue</option>
                   <option value="conversions">Conversions</option>
-                  <option value="leads">Leads</option>
-                  <option value="app_installs">App Installs</option>
                 </select>
+                <p className="cosmos-help-text">
+                  {config.kpiType === 'revenue'
+                    ? 'Revenue is the monetary value generated. Must be summable across geo and time.'
+                    : 'Conversions are countable events (purchases, sign-ups). Must be summable across geo and time.'}
+                </p>
               </div>
 
-              {config.kpiType !== 'revenue' && (
-                <div style={{ marginTop: '1.5rem' }}>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-                    <div className="cosmos-form-group">
-                      <label className="cosmos-label">DMO Object Name</label>
-                      <input
-                        className="cosmos-input"
-                        placeholder="e.g. Conversion__c"
-                        value={config.kpiDMO.objectName}
-                        onChange={(e) =>
-                          updateConfig({ kpiDMO: { ...config.kpiDMO, objectName: e.target.value } })
-                        }
-                      />
-                    </div>
-                    <div className="cosmos-form-group">
-                      <label className="cosmos-label">DMO Field Name</label>
-                      <input
-                        className="cosmos-input"
-                        placeholder="e.g. ConversionValue__c"
-                        value={config.kpiDMO.fieldName}
-                        onChange={(e) =>
-                          updateConfig({ kpiDMO: { ...config.kpiDMO, fieldName: e.target.value } })
-                        }
-                      />
-                    </div>
-                  </div>
+              {/* DMO Configuration — shown for both KPI types */}
+              <div style={{ marginTop: '1.5rem', border: '1px solid var(--cosmos-border)', borderRadius: 'var(--cosmos-radius-md)', padding: '20px' }}>
+                <h4 style={{ margin: '0 0 12px', fontSize: '14px', fontWeight: 700 }}>
+                  Data Model Object (DMO) Configuration
+                </h4>
+                <p className="cosmos-text-sm cosmos-text-muted" style={{ marginBottom: '16px' }}>
+                  Configure the Data Cloud object and field that contains your {config.kpiType === 'revenue' ? 'revenue' : 'conversion'} data.
+                </p>
 
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '1rem', marginTop: '1rem' }}>
-                    <div className="cosmos-form-group">
-                      <label className="cosmos-label">Filter Field</label>
-                      <input
-                        className="cosmos-input"
-                        placeholder="e.g. Status__c"
-                        value={config.kpiDMO.filterField || ''}
-                        onChange={(e) =>
-                          updateConfig({ kpiDMO: { ...config.kpiDMO, filterField: e.target.value } })
-                        }
-                      />
-                    </div>
-                    <div className="cosmos-form-group">
-                      <label className="cosmos-label">Filter Operator</label>
-                      <select
-                        className="cosmos-select"
-                        value={config.kpiDMO.filterOperator || 'equals'}
-                        onChange={(e) =>
-                          updateConfig({ kpiDMO: { ...config.kpiDMO, filterOperator: e.target.value } })
-                        }
-                      >
-                        <option value="equals">equals</option>
-                        <option value="contains">contains</option>
-                        <option value="greater_than">greater_than</option>
-                      </select>
-                    </div>
-                    <div className="cosmos-form-group">
-                      <label className="cosmos-label">Filter Value</label>
-                      <input
-                        className="cosmos-input"
-                        placeholder="e.g. Completed"
-                        value={config.kpiDMO.filterValue || ''}
-                        onChange={(e) =>
-                          updateConfig({ kpiDMO: { ...config.kpiDMO, filterValue: e.target.value } })
-                        }
-                      />
-                    </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                  <div className="cosmos-form-group">
+                    <label className="cosmos-label">DMO Object Name</label>
+                    <input
+                      className="cosmos-input"
+                      placeholder={config.kpiType === 'revenue' ? 'e.g. Revenue__dlm' : 'e.g. Conversion_Event__dlm'}
+                      value={config.kpiDMO.objectName}
+                      onChange={(e) =>
+                        updateConfig({ kpiDMO: { ...config.kpiDMO, objectName: e.target.value } })
+                      }
+                    />
                   </div>
+                  <div className="cosmos-form-group">
+                    <label className="cosmos-label">DMO Field Name</label>
+                    <input
+                      className="cosmos-input"
+                      placeholder={config.kpiType === 'revenue' ? 'e.g. Total_Revenue__c' : 'e.g. Conversion_Count__c'}
+                      value={config.kpiDMO.fieldName}
+                      onChange={(e) =>
+                        updateConfig({ kpiDMO: { ...config.kpiDMO, fieldName: e.target.value } })
+                      }
+                    />
+                  </div>
+                </div>
 
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '1rem', marginTop: '1rem' }}>
+                  <div className="cosmos-form-group">
+                    <label className="cosmos-label">Filter Field</label>
+                    <input
+                      className="cosmos-input"
+                      placeholder="e.g. Status__c"
+                      value={config.kpiDMO.filterField || ''}
+                      onChange={(e) =>
+                        updateConfig({ kpiDMO: { ...config.kpiDMO, filterField: e.target.value } })
+                      }
+                    />
+                  </div>
+                  <div className="cosmos-form-group">
+                    <label className="cosmos-label">Filter Operator</label>
+                    <select
+                      className="cosmos-select"
+                      value={config.kpiDMO.filterOperator || 'equals'}
+                      onChange={(e) =>
+                        updateConfig({ kpiDMO: { ...config.kpiDMO, filterOperator: e.target.value } })
+                      }
+                    >
+                      <option value="equals">Equals</option>
+                      <option value="not_equals">Not Equals</option>
+                      <option value="contains">Contains</option>
+                      <option value="greater_than">Greater Than</option>
+                      <option value="less_than">Less Than</option>
+                    </select>
+                  </div>
+                  <div className="cosmos-form-group">
+                    <label className="cosmos-label">Filter Value</label>
+                    <input
+                      className="cosmos-input"
+                      placeholder="e.g. Completed"
+                      value={config.kpiDMO.filterValue || ''}
+                      onChange={(e) =>
+                        updateConfig({ kpiDMO: { ...config.kpiDMO, filterValue: e.target.value } })
+                      }
+                    />
+                  </div>
+                </div>
+
+                {config.kpiType === 'conversions' && (
                   <div className="cosmos-form-group" style={{ marginTop: '1rem', maxWidth: '300px' }}>
-                    <label className="cosmos-label">Revenue per KPI Unit</label>
+                    <label className="cosmos-label">Revenue per Conversion</label>
                     <input
                       className="cosmos-input"
                       type="number"
-                      placeholder="e.g. 45.00"
+                      placeholder="e.g. 85.00"
                       value={revenuePerKPI}
                       onChange={(e) => setRevenuePerKPI(e.target.value)}
                     />
-                    <p className="cosmos-help-text">Estimated monetary value per conversion/lead/install</p>
+                    <p className="cosmos-help-text">Average monetary value per conversion event</p>
                   </div>
-                </div>
-              )}
+                )}
+              </div>
 
               {/* Preview */}
               <div className="cosmos-alert cosmos-alert--info" style={{ marginTop: '1.5rem' }}>
                 <Info size={16} />
                 <span className="cosmos-text-sm">
-                  KPI will be summed across all geos and time periods.
-                  {config.kpiType !== 'revenue' && revenuePerKPI && (
-                    <> Estimated revenue = {config.kpiType} count x ${revenuePerKPI} per unit.</>
-                  )}
+                  {config.kpiType === 'revenue'
+                    ? 'Revenue KPI will be summed across all geos and time periods for model training.'
+                    : `Conversions will be summed across all geos and time periods.${revenuePerKPI ? ` Estimated revenue = conversions x $${revenuePerKPI} per unit.` : ''}`
+                  }
                 </span>
               </div>
             </div>
@@ -795,7 +809,7 @@ export default function ConfigPage() {
                         checked={config.externalFactors[factor.key]}
                         onChange={(e) => updateExternalFactors({ [factor.key]: e.target.checked })}
                       />
-                      <span className="cosmos-toggle__slider" />
+                      <span className="cosmos-toggle__track" />
                     </label>
                   </div>
                 ))}
