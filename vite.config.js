@@ -1,7 +1,7 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 
-export default defineConfig({
+export default defineConfig(({ command }) => ({
   plugins: [react()],
-  base: '/MI-Meridian-V2/',
-});
+  base: command === 'serve' ? '/' : '/MI-Meridian-V2/',
+}));
