@@ -1,0 +1,161 @@
+import { createContext, useContext, useReducer } from 'react';
+
+const AppContext = createContext(null);
+
+const initialState = {
+  currentStep: 'home',
+  pipelineData: null,
+  complianceLevel: null,
+  pipelineName: '',
+  validationResults: null,
+  lookbackYears: null,
+  config: {
+    dataFeed: {
+      thirdPartyType: 'api',
+      apiSources: {},
+      apiPipelines: {},
+      apiRule: { type: '', value: '' },
+      apiExcludes: {},
+      tcPipelines: {},
+      tcRule: { type: '', value: '' },
+    },
+    connectFirstParty: false,
+    firstPartyChannels: { email: false, whatsapp: false, sms: false },
+    kpiType: 'revenue',
+    kpiDMO: { objectName: '', fieldName: '', filterField: '', filterOperator: 'equals', filterValue: '' },
+    showAdvanced: false,
+    adstockDecay: 'geometric',
+    maxLag: 8,
+    hillBeforeAdstock: false,
+    knots: 'auto',
+    enableAKS: true,
+    priorROI: { mean: 0.0, std: 0.5 },
+    useMTAPriors: false,
+    externalFactors: {
+      seasonality: true,
+      holidays: true,
+      gqv: false,
+      competitorActivity: false,
+      macroEconomic: false,
+      weather: false,
+    },
+    budgetOptimization: {
+      scenario: 'fixed',
+      totalBudget: 10000000,
+      targetROI: 1.0,
+      budgetPeriod: 'yearly',
+      beginDate: new Date().toISOString().slice(0, 10),
+      useSeasonalityIndex: false,
+      spendConstraintLower: 0.5,
+      spendConstraintUpper: 2.0,
+    },
+  },
+  // MTA State
+  mtaConfig: {
+    model: 'data_driven',
+    lookbackWindow: 30,
+    conversionEvent: 'purchase',
+    channels: [],
+    channelWeights: {},
+    results: null,
+  },
+  // Training & Results
+  trainingStatus: 'idle',
+  trainingProgress: 0,
+  modelDiagnostics: null,
+  dashboardData: null,
+  optimizationResults: null,
+  // MTA-MMM Integration
+  mtaMMMSync: {
+    mtaToMMM: false,
+    mmmToMTA: false,
+    lastSyncDate: null,
+    calibrationResults: null,
+  },
+};
+
+function appReducer(state, action) {
+  switch (action.type) {
+    case 'SET_STEP':
+      return { ...state, currentStep: action.payload };
+    case 'SET_PIPELINE_DATA':
+      return { ...state, pipelineData: action.payload };
+    case 'SET_COMPLIANCE_LEVEL':
+      return { ...state, complianceLevel: action.payload };
+    case 'SET_PIPELINE_NAME':
+      return { ...state, pipelineName: action.payload };
+    case 'SET_VALIDATION_RESULTS':
+      return { ...state, validationResults: action.payload };
+    case 'SET_LOOKBACK_YEARS':
+      return { ...state, lookbackYears: action.payload };
+    case 'UPDATE_FIRST_PARTY_CHANNELS':
+      return {
+        ...state,
+        config: {
+          ...state.config,
+          firstPartyChannels: { ...state.config.firstPartyChannels, ...action.payload },
+        },
+      };
+    case 'UPDATE_CONFIG':
+      return { ...state, config: { ...state.config, ...action.payload } };
+    case 'UPDATE_DATA_FEED':
+      return {
+        ...state,
+        config: {
+          ...state.config,
+          dataFeed: { ...state.config.dataFeed, ...action.payload },
+        },
+      };
+    case 'UPDATE_EXTERNAL_FACTORS':
+      return {
+        ...state,
+        config: {
+          ...state.config,
+          externalFactors: { ...state.config.externalFactors, ...action.payload },
+        },
+      };
+    case 'UPDATE_BUDGET_CONFIG':
+      return {
+        ...state,
+        config: {
+          ...state.config,
+          budgetOptimization: { ...state.config.budgetOptimization, ...action.payload },
+        },
+      };
+    case 'UPDATE_MTA_CONFIG':
+      return { ...state, mtaConfig: { ...state.mtaConfig, ...action.payload } };
+    case 'SET_MTA_RESULTS':
+      return { ...state, mtaConfig: { ...state.mtaConfig, results: action.payload } };
+    case 'UPDATE_MTA_MMM_SYNC':
+      return { ...state, mtaMMMSync: { ...state.mtaMMMSync, ...action.payload } };
+    case 'SET_TRAINING_STATUS':
+      return { ...state, trainingStatus: action.payload };
+    case 'SET_TRAINING_PROGRESS':
+      return { ...state, trainingProgress: action.payload };
+    case 'SET_MODEL_DIAGNOSTICS':
+      return { ...state, modelDiagnostics: action.payload };
+    case 'SET_DASHBOARD_DATA':
+      return { ...state, dashboardData: action.payload };
+    case 'SET_OPTIMIZATION_RESULTS':
+      return { ...state, optimizationResults: action.payload };
+    case 'RESET':
+      return initialState;
+    default:
+      return state;
+  }
+}
+
+export function AppProvider({ children }) {
+  const [state, dispatch] = useReducer(appReducer, initialState);
+  return (
+    <AppContext.Provider value={{ state, dispatch }}>
+      {children}
+    </AppContext.Provider>
+  );
+}
+
+export function useApp() {
+  const context = useContext(AppContext);
+  if (!context) throw new Error('useApp must be used within AppProvider');
+  return context;
+}
