@@ -335,76 +335,141 @@ export default function ConfigPage() {
         </div>
       </section>
 
-      {/* Section 4: MTA-Informed Priors */}
+      {/* Section 4: MTA ↔ Meridian Integration */}
       <section className="cosmos-section animate-slide-in">
         <div className="cosmos-section__header">
           <div className="cosmos-section__header-left">
-            <div className="cosmos-section__icon">
-              <GitBranch size={18} />
+            <div className="cosmos-section__icon" style={{ background: '#9050E9' }}>
+              <GitBranch size={18} color="#fff" />
             </div>
-            <h2 className="cosmos-section__title">MTA-Informed Priors</h2>
+            <h2 className="cosmos-section__title">MTA ↔ Meridian Integration</h2>
           </div>
+          <span className="cosmos-badge cosmos-badge--info">NEW</span>
         </div>
         <div className="cosmos-section__body">
-          <div className="cosmos-alert cosmos-alert--info" style={{ marginBottom: '1rem' }}>
+          <div className="cosmos-alert cosmos-alert--info" style={{ marginBottom: '1.5rem' }}>
             <Info size={16} />
             <span>
-              Multi-Touch Attribution results can be used to inform Bayesian priors in the MMM,
-              improving model convergence and providing cross-methodology validation.
+              Connect Meridian with an existing MI Multi-Touch Attribution model for bidirectional calibration.
+              High-performing MTA channels can inform Meridian priors, and Meridian outputs can re-weight MTA channel significance.
             </span>
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1rem' }}>
-            <span className="cosmos-text-sm">Enable MTA Priors</span>
-            <label className="cosmos-toggle">
-              <input
-                type="checkbox"
-                checked={config.useMTAPriors}
-                onChange={(e) => updateConfig({ useMTAPriors: e.target.checked })}
-              />
-              <span className="cosmos-toggle__slider" />
-            </label>
+          {/* Pull: MTA → Meridian Priors */}
+          <div style={{ border: '1px solid var(--cosmos-border)', borderRadius: 'var(--cosmos-radius-md)', padding: '20px', marginBottom: '16px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
+              <div>
+                <h4 style={{ margin: 0, fontSize: '14px', fontWeight: 700 }}>Pull MTA Channel ROI as Priors</h4>
+                <p className="cosmos-text-sm cosmos-text-muted" style={{ margin: '4px 0 0' }}>
+                  Use channel ROI from a selected MTA model as informative Bayesian priors for Meridian
+                </p>
+              </div>
+              <label className="cosmos-toggle">
+                <input
+                  type="checkbox"
+                  checked={config.useMTAPriors}
+                  onChange={(e) => updateConfig({ useMTAPriors: e.target.checked })}
+                />
+                <span className="cosmos-toggle__track" />
+              </label>
+            </div>
+
+            {config.useMTAPriors && (
+              <div style={{ marginTop: '16px' }}>
+                <div className="cosmos-form-group">
+                  <label className="cosmos-label">Select MTA Model</label>
+                  <select className="cosmos-select">
+                    <option value="data_driven">Data-Driven Attribution (Default)</option>
+                    <option value="position_based">Position-Based (U-Shaped)</option>
+                    <option value="time_decay">Time Decay</option>
+                    <option value="linear">Linear</option>
+                  </select>
+                  <p className="cosmos-help-text">Channels with high MTA ROI will receive tighter prior distributions, guiding Meridian toward those estimates.</p>
+                </div>
+
+                <table className="cosmos-table" style={{ marginTop: '12px' }}>
+                  <thead>
+                    <tr>
+                      <th>Channel</th>
+                      <th>MTA ROI</th>
+                      <th>Prior Mean (log)</th>
+                      <th>Prior Std</th>
+                      <th>Confidence</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {[
+                      { channel: 'Google Ads', mtaROI: 2.8, confidence: 'High' },
+                      { channel: 'Meta Ads', mtaROI: 1.9, confidence: 'High' },
+                      { channel: 'YouTube Ads', mtaROI: 1.8, confidence: 'Medium' },
+                      { channel: 'LinkedIn Ads', mtaROI: 1.6, confidence: 'Medium' },
+                      { channel: 'TikTok Ads', mtaROI: 1.2, confidence: 'Low' },
+                      { channel: 'Amazon Ads', mtaROI: 2.1, confidence: 'High' },
+                    ].map((row) => (
+                      <tr key={row.channel}>
+                        <td style={{ fontWeight: 600 }}>{row.channel}</td>
+                        <td>{row.mtaROI.toFixed(2)}</td>
+                        <td>{Math.log(row.mtaROI).toFixed(3)}</td>
+                        <td>{row.confidence === 'High' ? '0.4' : row.confidence === 'Medium' ? '0.7' : '1.0'}</td>
+                        <td>
+                          <span className={`cosmos-badge cosmos-badge--${row.confidence === 'High' ? 'success' : row.confidence === 'Medium' ? 'warning' : 'neutral'}`}>
+                            {row.confidence}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
 
-          {config.useMTAPriors && mtaConfig.results && (
-            <div style={{ marginTop: '1rem' }}>
-              <table className="cosmos-table">
-                <thead>
-                  <tr>
-                    <th>Channel</th>
-                    <th>MTA ROI</th>
-                    <th>Prior Mean</th>
-                    <th>Prior Std</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {Object.entries(mtaConfig.results.channelROI || {}).map(([channel, roi]) => (
-                    <tr key={channel}>
-                      <td>{channel}</td>
-                      <td>{typeof roi === 'number' ? roi.toFixed(3) : roi}</td>
-                      <td>{typeof roi === 'number' ? roi.toFixed(3) : roi}</td>
-                      <td>{typeof roi === 'number' ? (roi * 0.3).toFixed(3) : '0.500'}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+          {/* Push: Meridian → MTA Re-weighting */}
+          <div style={{ border: '1px solid var(--cosmos-border)', borderRadius: 'var(--cosmos-radius-md)', padding: '20px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
+              <div>
+                <h4 style={{ margin: 0, fontSize: '14px', fontWeight: 700 }}>Push Meridian ROI to Re-weight MTA</h4>
+                <p className="cosmos-text-sm cosmos-text-muted" style={{ margin: '4px 0 0' }}>
+                  After model training, push Meridian's channel ROI back to re-weight channel significance in a selected MTA model
+                </p>
+              </div>
+              <label className="cosmos-toggle">
+                <input
+                  type="checkbox"
+                  checked={state.mtaMMMSync?.mmmToMTA || false}
+                  onChange={(e) => dispatch({ type: 'UPDATE_MTA_MMM_SYNC', payload: { mmmToMTA: e.target.checked } })}
+                />
+                <span className="cosmos-toggle__track" />
+              </label>
             </div>
-          )}
 
-          {config.useMTAPriors && !mtaConfig.results && (
-            <div className="cosmos-alert cosmos-alert--warning" style={{ marginTop: '1rem' }}>
-              <AlertTriangle size={16} />
-              <span>No MTA results available. Run an MTA analysis first to generate priors.</span>
-              <button
-                className="cosmos-btn cosmos-btn--sm cosmos-btn--outline"
-                style={{ marginLeft: 'auto' }}
-                onClick={() => dispatch({ type: 'SET_STEP', payload: 'mta' })}
-              >
-                Go to MTA
-                <ArrowRight size={14} />
-              </button>
-            </div>
-          )}
+            {state.mtaMMMSync?.mmmToMTA && (
+              <div style={{ marginTop: '16px' }}>
+                <div className="cosmos-form-group">
+                  <label className="cosmos-label">Target MTA Model for Re-weighting</label>
+                  <select className="cosmos-select">
+                    <option value="data_driven">Data-Driven Attribution (Default)</option>
+                    <option value="position_based">Position-Based (U-Shaped)</option>
+                    <option value="time_decay">Time Decay</option>
+                    <option value="linear">Linear</option>
+                  </select>
+                  <p className="cosmos-help-text">After Meridian training completes, channel ROI estimates will be pushed to adjust the selected MTA model's channel weighting.</p>
+                </div>
+
+                {state.trainingStatus === 'complete' ? (
+                  <div className="cosmos-alert cosmos-alert--success" style={{ marginTop: '12px' }}>
+                    <CheckCircle size={16} />
+                    <span>Meridian model is trained. Channel ROI is ready to push to MTA on next sync.</span>
+                  </div>
+                ) : (
+                  <div className="cosmos-alert cosmos-alert--warning" style={{ marginTop: '12px' }}>
+                    <AlertTriangle size={16} />
+                    <span>Meridian model training must complete before ROI can be pushed to MTA.</span>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
         </div>
       </section>
 

@@ -22,8 +22,6 @@ export default function Layout({ children }) {
     switch (page) {
       case 'pipeline':
         return true;
-      case 'mta':
-        return !!state.pipelineData;
       case 'config':
         return !!state.pipelineData;
       case 'training':
@@ -32,8 +30,6 @@ export default function Layout({ children }) {
         return !!state.validationResults?.canProceed;
       case 'dashboards':
         return state.trainingStatus === 'complete';
-      case 'mta-insights':
-        return !!state.dashboardData && !!state.mtaConfig?.results;
       default:
         return true;
     }
@@ -69,12 +65,10 @@ export default function Layout({ children }) {
       onToggle: () => setMeridianExpanded(!meridianExpanded),
       children: [
         { id: 'data-ingestion', label: 'Data Ingestion', page: 'pipeline' },
-        { id: 'mta-configuration', label: 'MTA Configuration', page: 'mta' },
-        { id: 'meridian-configuration', label: 'Meridian Configuration', page: 'config' },
+        { id: 'meridian-configuration', label: 'Configuration', page: 'config' },
         { id: 'model-data-feed', label: 'Model Data Feed', page: 'training' },
         { id: 'budget-optimization', label: 'Budget Optimization', page: 'budget' },
-        { id: 'meridian-dashboards', label: 'Meridian Dashboards', page: 'dashboards' },
-        { id: 'mta-mmm-insights', label: 'MTA-MMM Insights', page: 'mta-insights' },
+        { id: 'meridian-dashboards', label: 'Dashboards', page: 'dashboards' },
       ],
     },
   ];

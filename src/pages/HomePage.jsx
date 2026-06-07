@@ -20,42 +20,32 @@ export default function HomePage() {
       title: 'Data Ingestion',
       description: 'Connect and validate your marketing spend, impressions, and KPI data sources.',
       icon: Database,
-      page: 'data-ingestion',
+      page: 'pipeline',
       ready: true,
       complete: !!pipelineData,
     },
     {
       number: 2,
-      title: 'MTA Configuration',
-      description: 'Set up Multi-Touch Attribution models to generate channel-level priors.',
-      icon: GitBranch,
-      page: 'mta-config',
-      isNew: true,
-      ready: !!pipelineData,
-      complete: !!validationResults,
-    },
-    {
-      number: 3,
       title: 'Meridian Configuration',
-      description: 'Configure model parameters, adstock, saturation, and external factors.',
+      description: 'Configure model parameters, MTA-informed priors, adstock, saturation, and external factors.',
       icon: Settings,
-      page: 'meridian-config',
-      ready: !!validationResults,
+      page: 'config',
+      ready: !!pipelineData,
       complete: !!validationResults?.canProceed,
     },
     {
-      number: 4,
+      number: 3,
       title: 'Model Data Feed',
-      description: 'Prepare and validate the final dataset for Meridian model training.',
+      description: 'Run Bayesian inference with MCMC sampling via Meridian.',
       icon: Zap,
-      page: 'model-data-feed',
+      page: 'training',
       ready: !!validationResults?.canProceed,
       complete: trainingStatus === 'complete',
     },
     {
-      number: 5,
-      title: 'Dashboards & Insights',
-      description: 'Explore ROI curves, budget optimization, and channel contribution insights.',
+      number: 4,
+      title: 'Dashboards & Optimization',
+      description: 'View ROI, response curves, budget optimization, and MTA↔MMM insights.',
       icon: LayoutDashboard,
       page: 'dashboards',
       ready: trainingStatus === 'complete',
@@ -183,7 +173,7 @@ export default function HomePage() {
           </ul>
         </div>
 
-        {/* MTA to MMM Integration */}
+        {/* MTA ↔ MMM Integration */}
         <div className="cosmos-card" style={{ padding: '24px', position: 'relative' }}>
           <span
             className="cosmos-badge cosmos-badge--info"
@@ -193,14 +183,14 @@ export default function HomePage() {
           </span>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
             <GitBranch size={20} className="cosmos-text-brand" />
-            <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 600 }}>MTA to MMM Integration</h3>
+            <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 600 }}>MTA ↔ Meridian Integration</h3>
           </div>
           <ul style={{ margin: 0, paddingLeft: '20px', lineHeight: 2 }} className="cosmos-text-sm">
-            <li>Bidirectional calibration between MTA and MMM outputs</li>
-            <li>MTA-derived channel priors injected into Meridian's Bayesian model</li>
-            <li>MMM long-term effects feed back to refine attribution weights</li>
-            <li>Unified cross-channel view combining user-level and aggregate signals</li>
-            <li>Automated drift detection when MTA and MMM diverge beyond thresholds</li>
+            <li>Pull channel ROI from an existing MI MTA model as Bayesian priors for Meridian</li>
+            <li>Push Meridian channel ROI back to re-weight channel significance in a selected MTA model</li>
+            <li>High-performing MTA channels inform tighter Meridian prior distributions</li>
+            <li>Meridian's long-term media effects refine MTA's channel weighting</li>
+            <li>Configured directly within the Meridian Configuration step</li>
           </ul>
         </div>
       </div>
