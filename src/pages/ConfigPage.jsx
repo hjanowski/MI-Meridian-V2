@@ -221,7 +221,6 @@ export default function ConfigPage() {
   const [totalConnectActive, setTotalConnectActive] = useState(false);
   const [totalConnectMetrics, setTotalConnectMetrics] = useState({});
   const [totalConnectEnabled, setTotalConnectEnabled] = useState({});
-  const [revenuePerKPI, setRevenuePerKPI] = useState('');
 
   const updateConfig = (payload) => dispatch({ type: 'UPDATE_CONFIG', payload });
   const updateDataFeed = (payload) => dispatch({ type: 'UPDATE_DATA_FEED', payload });
@@ -793,19 +792,6 @@ export default function ConfigPage() {
                   </div>
                 </div>
 
-                {config.kpiType === 'conversions' && (
-                  <div className="cosmos-form-group" style={{ marginTop: '1rem', maxWidth: '300px' }}>
-                    <label className="cosmos-label">Revenue per Conversion</label>
-                    <input
-                      className="cosmos-input"
-                      type="number"
-                      placeholder="e.g. 85.00"
-                      value={revenuePerKPI}
-                      onChange={(e) => setRevenuePerKPI(e.target.value)}
-                    />
-                    <p className="cosmos-help-text">Average monetary value per conversion event</p>
-                  </div>
-                )}
               </div>
 
               {/* Preview */}
@@ -814,7 +800,7 @@ export default function ConfigPage() {
                 <span className="cosmos-text-sm">
                   {config.kpiType === 'revenue'
                     ? 'Revenue KPI will be summed across all geos and time periods for model training.'
-                    : `Conversions will be summed across all geos and time periods.${revenuePerKPI ? ` Estimated revenue = conversions x $${revenuePerKPI} per unit.` : ''}`
+                    : 'Conversions will be summed across all geos and time periods for model training.'
                   }
                 </span>
               </div>
