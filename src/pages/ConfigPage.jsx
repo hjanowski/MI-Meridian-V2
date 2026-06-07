@@ -346,19 +346,19 @@ export default function ConfigPage() {
             </div>
           </section>
 
-          {/* Sub-section B: First Party Data (Data Cloud) */}
+          {/* Sub-section B: First Party Data (Marketing Cloud) */}
           <section className="cosmos-section animate-slide-in">
             <div className="cosmos-section__header">
               <div className="cosmos-section__header-left">
-                <div className="cosmos-section__icon">
-                  <Mail size={18} />
+                <div className="cosmos-section__icon" style={{ background: '#FF6D2E' }}>
+                  <Mail size={18} color="#fff" />
                 </div>
-                <h2 className="cosmos-section__title">First Party Data (Data Cloud)</h2>
+                <h2 className="cosmos-section__title">First Party Data (Marketing Cloud)</h2>
               </div>
             </div>
             <div className="cosmos-section__body">
               <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1.25rem' }}>
-                <span className="cosmos-text-sm cosmos-text-bold">Connect First Party Data from Data Cloud</span>
+                <span className="cosmos-text-sm cosmos-text-bold">Connect First Party Data from Marketing Cloud</span>
                 <label className="cosmos-toggle">
                   <input
                     type="checkbox"
@@ -370,8 +370,12 @@ export default function ConfigPage() {
               </div>
 
               {config.connectFirstParty && (
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '1rem' }}>
-                  {FIRST_PARTY_CHANNELS.map((channel) => (
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '1rem' }}>
+                  {[
+                    { id: 'email', name: 'Email', icon: <Mail size={18} />, activities: ['Email Opens', 'Emails Delivered', 'Emails Clicked', 'Emails Sent', 'Email Bounces', 'Email Unsubscribes'] },
+                    { id: 'whatsapp', name: 'WhatsApp', icon: <MessageSquare size={18} />, activities: ['WhatsApp Delivered', 'WhatsApp Read', 'WhatsApp Replied', 'WhatsApp Sent', 'WhatsApp Failed'] },
+                    { id: 'sms', name: 'SMS', icon: <Smartphone size={18} />, activities: ['SMS Delivered', 'SMS Clicked', 'SMS Sent', 'SMS Bounced', 'SMS Opted Out'] },
+                  ].map((channel) => (
                     <div key={channel.id} className="cosmos-card">
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
@@ -391,29 +395,21 @@ export default function ConfigPage() {
                       {config.firstPartyChannels[channel.id] && (
                         <div style={{ paddingTop: '0.75rem', borderTop: '1px solid var(--cosmos-border, #e0e0e0)' }}>
                           <div className="cosmos-form-group" style={{ marginBottom: '0.75rem' }}>
-                            <label className="cosmos-label cosmos-text-xs">Data Cloud Object</label>
+                            <label className="cosmos-label cosmos-text-xs">Activity Represents (Media Activity)</label>
                             <select
                               className="cosmos-select"
                               value={firstPartyObjects[channel.id] || ''}
                               onChange={(e) => setFirstPartyObjects({ ...firstPartyObjects, [channel.id]: e.target.value })}
                             >
-                              <option value="">-- Select Object --</option>
-                              {DATA_CLOUD_OBJECTS.map((obj) => (
-                                <option key={obj} value={obj}>{obj}</option>
+                              <option value="">-- Select Activity --</option>
+                              {channel.activities.map((act) => (
+                                <option key={act} value={act}>{act}</option>
                               ))}
                             </select>
-                          </div>
-                          <div className="cosmos-form-group" style={{ marginBottom: '0.75rem' }}>
-                            <label className="cosmos-label cosmos-text-xs">Field Name</label>
-                            <input
-                              className="cosmos-input"
-                              placeholder="e.g. Opens, Clicks, Sends"
-                              value={firstPartyFields[channel.id] || ''}
-                              onChange={(e) => setFirstPartyFields({ ...firstPartyFields, [channel.id]: e.target.value })}
-                            />
+                            <p className="cosmos-help-text">Select the Data Cloud activity field that represents engagement for this channel</p>
                           </div>
                           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                            <span className="cosmos-badge cosmos-badge--info" style={{ fontSize: '11px' }}>
+                            <span className="cosmos-badge cosmos-badge--success" style={{ fontSize: '11px' }}>
                               Available from: Jan 2022 — Present
                             </span>
                           </div>
@@ -430,8 +426,8 @@ export default function ConfigPage() {
           <section className="cosmos-section animate-slide-in">
             <div className="cosmos-section__header">
               <div className="cosmos-section__header-left">
-                <div className="cosmos-section__icon">
-                  <Tv size={18} />
+                <div className="cosmos-section__icon" style={{ background: '#032D60' }}>
+                  <Tv size={18} color="#fff" />
                 </div>
                 <h2 className="cosmos-section__title">TotalConnect</h2>
               </div>
@@ -450,39 +446,116 @@ export default function ConfigPage() {
               </div>
 
               {totalConnectActive && (
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: '1rem' }}>
-                  {TOTALCONNECT_SOURCES.map((source) => (
-                    <div key={source.id} className="cosmos-card">
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.75rem' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
-                          {source.icon}
-                          <span className="cosmos-text-bold">{source.name}</span>
+                <div>
+                  {/* Pipeline Selection List */}
+                  <h4 style={{ fontSize: 13, fontWeight: 700, marginBottom: 8 }}>Pipeline Selection</h4>
+                  <div style={{
+                    background: 'var(--cosmos-neutral-100)', border: '1px solid var(--cosmos-border)',
+                    borderRadius: 'var(--cosmos-radius-md)', maxHeight: 220, overflowY: 'auto', marginBottom: 20,
+                  }}>
+                    {[
+                      { id: 'tv_linear_national', name: 'TV - Linear National' },
+                      { id: 'tv_linear_local', name: 'TV - Linear Local' },
+                      { id: 'tv_streaming_hulu', name: 'TV - Streaming (Hulu)' },
+                      { id: 'tv_streaming_roku', name: 'TV - Streaming (Roku)' },
+                      { id: 'tv_streaming_paramount', name: 'TV - Streaming (Paramount+)' },
+                      { id: 'radio_national', name: 'Radio - National' },
+                      { id: 'radio_local', name: 'Radio - Local/Spot' },
+                      { id: 'radio_streaming', name: 'Radio - Streaming (Spotify/Pandora)' },
+                      { id: 'print_newspaper', name: 'Print - Newspaper' },
+                      { id: 'print_magazine', name: 'Print - Magazine' },
+                      { id: 'ooh_billboards', name: 'OOH - Billboards' },
+                      { id: 'ooh_transit', name: 'OOH - Transit' },
+                      { id: 'ooh_digital', name: 'OOH - Digital Screens' },
+                      { id: 'cinema', name: 'Cinema' },
+                    ].map((p) => {
+                      const isSelected = !!totalConnectEnabled[p.id];
+                      return (
+                        <div key={p.id} style={{
+                          display: 'flex', alignItems: 'center', padding: '8px 14px',
+                          borderBottom: '1px solid var(--cosmos-neutral-90)',
+                          background: isSelected ? 'var(--cosmos-info-light)' : 'transparent',
+                        }}>
+                          <label style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 13 }}>
+                            <input
+                              type="checkbox"
+                              checked={isSelected}
+                              onChange={(e) => setTotalConnectEnabled({ ...totalConnectEnabled, [p.id]: e.target.checked })}
+                            />
+                            <span style={{ fontWeight: isSelected ? 600 : 400 }}>{p.name}</span>
+                          </label>
+                          {isSelected && (
+                            <span className="cosmos-badge cosmos-badge--success" style={{ fontSize: 10 }}>Selected</span>
+                          )}
                         </div>
-                        <label className="cosmos-toggle">
-                          <input
-                            type="checkbox"
-                            checked={!!totalConnectEnabled[source.id]}
-                            onChange={(e) => setTotalConnectEnabled({ ...totalConnectEnabled, [source.id]: e.target.checked })}
-                          />
-                          <span className="cosmos-toggle__track" />
-                        </label>
+                      );
+                    })}
+                  </div>
+
+                  {/* Meridian Measurement Mapping */}
+                  {Object.keys(totalConnectEnabled).filter(k => totalConnectEnabled[k]).length > 0 && (
+                    <div>
+                      <h4 style={{ fontSize: 13, fontWeight: 700, marginBottom: 8 }}>Meridian Measurement Mapping</h4>
+                      <p className="cosmos-text-sm cosmos-text-muted" style={{ marginBottom: 12 }}>
+                        For each selected TotalConnect source, choose which measurement represents the
+                        <strong> Media Activity</strong> and which represents the <strong>Media Cost</strong>.
+                      </p>
+                      <div style={{ border: '1px solid var(--cosmos-border)', borderRadius: 'var(--cosmos-radius-md)', overflow: 'hidden' }}>
+                        <table className="cosmos-table">
+                          <thead>
+                            <tr>
+                              <th style={{ width: '25%' }}>Source</th>
+                              <th style={{ width: '37%' }}>Media Activity Measurement</th>
+                              <th style={{ width: '38%' }}>Media Cost Measurement</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {Object.keys(totalConnectEnabled).filter(k => totalConnectEnabled[k]).map((id) => {
+                              const name = id.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+                              const isTV = id.includes('tv');
+                              const isRadio = id.includes('radio');
+                              const isOOH = id.includes('ooh');
+                              const activityOptions = isTV
+                                ? ['GRPs', 'Impressions', 'Reach', 'TRPs']
+                                : isRadio
+                                ? ['GRPs', 'Impressions', 'Reach', 'Listeners']
+                                : isOOH
+                                ? ['Impressions', 'Reach', 'Panels']
+                                : ['Impressions', 'Reach', 'GRPs'];
+                              const costOptions = ['Spend ($)', 'CPM', 'CPP (Cost Per Point)', 'Total Invoice'];
+                              return (
+                                <tr key={id}>
+                                  <td style={{ fontWeight: 600, fontSize: 12 }}>{name}</td>
+                                  <td>
+                                    <select
+                                      className="cosmos-select"
+                                      style={{ fontSize: 12 }}
+                                      value={totalConnectMetrics[id + '_activity'] || ''}
+                                      onChange={(e) => setTotalConnectMetrics({ ...totalConnectMetrics, [id + '_activity']: e.target.value })}
+                                    >
+                                      <option value="">-- Select Activity --</option>
+                                      {activityOptions.map(o => <option key={o} value={o}>{o}</option>)}
+                                    </select>
+                                  </td>
+                                  <td>
+                                    <select
+                                      className="cosmos-select"
+                                      style={{ fontSize: 12 }}
+                                      value={totalConnectMetrics[id + '_cost'] || ''}
+                                      onChange={(e) => setTotalConnectMetrics({ ...totalConnectMetrics, [id + '_cost']: e.target.value })}
+                                    >
+                                      <option value="">-- Select Cost --</option>
+                                      {costOptions.map(o => <option key={o} value={o}>{o}</option>)}
+                                    </select>
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
                       </div>
-                      {totalConnectEnabled[source.id] && (
-                        <div className="cosmos-form-group" style={{ marginBottom: 0 }}>
-                          <label className="cosmos-label cosmos-text-xs">Metric</label>
-                          <select
-                            className="cosmos-select"
-                            value={totalConnectMetrics[source.id] || 'grp'}
-                            onChange={(e) => setTotalConnectMetrics({ ...totalConnectMetrics, [source.id]: e.target.value })}
-                          >
-                            <option value="grp">GRP</option>
-                            <option value="impressions">Impressions</option>
-                            <option value="spend">Spend</option>
-                          </select>
-                        </div>
-                      )}
                     </div>
-                  ))}
+                  )}
                 </div>
               )}
             </div>
