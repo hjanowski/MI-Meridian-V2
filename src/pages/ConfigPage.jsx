@@ -113,6 +113,102 @@ const FIRST_PARTY_CHANNELS = [
 
 const STEP_LABELS = ['Data Feed', 'KPI Setup', 'Model Settings'];
 
+// --- DMO Objects and Fields ---
+const DMO_OBJECTS = [
+  'Revenue__dlm',
+  'Order__dlm',
+  'Opportunity__dlm',
+  'Sales_Transaction__dlm',
+  'Conversion_Event__dlm',
+  'Lead_Conversion__dlm',
+  'Purchase_Event__dlm',
+  'Subscription__dlm',
+  'Engagement_Event__dlm',
+  'Campaign_Influence__dlm',
+  'Web_Session__dlm',
+  'App_Event__dlm',
+  'Marketing_Attribution__dlm',
+  'Customer_Lifetime_Value__dlm',
+];
+
+const DMO_FIELDS = {
+  'Revenue__dlm': ['Total_Revenue__c', 'Net_Revenue__c', 'Gross_Revenue__c', 'Recurring_Revenue__c', 'Revenue_Amount__c', 'Transaction_Value__c'],
+  'Order__dlm': ['Order_Total__c', 'Order_Value__c', 'Order_Count__c', 'Average_Order_Value__c', 'Net_Order_Revenue__c'],
+  'Opportunity__dlm': ['Amount__c', 'Expected_Revenue__c', 'Closed_Won_Amount__c', 'Pipeline_Value__c', 'Opportunity_Count__c'],
+  'Sales_Transaction__dlm': ['Transaction_Amount__c', 'Net_Sales__c', 'Gross_Sales__c', 'Units_Sold__c', 'Discount_Amount__c'],
+  'Conversion_Event__dlm': ['Conversion_Count__c', 'Conversion_Value__c', 'Assisted_Conversions__c', 'Direct_Conversions__c', 'Conversion_Rate__c'],
+  'Lead_Conversion__dlm': ['Converted_Leads__c', 'Lead_Value__c', 'Qualified_Leads__c', 'MQL_Count__c', 'SQL_Count__c'],
+  'Purchase_Event__dlm': ['Purchase_Count__c', 'Purchase_Value__c', 'First_Purchase__c', 'Repeat_Purchase__c', 'Average_Purchase_Value__c'],
+  'Subscription__dlm': ['New_Subscriptions__c', 'Subscription_Revenue__c', 'Churn_Count__c', 'MRR__c', 'ARR__c'],
+  'Engagement_Event__dlm': ['Engagement_Score__c', 'Page_Views__c', 'Session_Count__c', 'Time_On_Site__c', 'Form_Submissions__c'],
+  'Campaign_Influence__dlm': ['Influenced_Revenue__c', 'Influenced_Pipeline__c', 'Campaign_ROI__c', 'Touches__c', 'First_Touch_Revenue__c'],
+  'Web_Session__dlm': ['Sessions__c', 'Unique_Visitors__c', 'Bounce_Rate__c', 'Pages_Per_Session__c', 'Goal_Completions__c'],
+  'App_Event__dlm': ['App_Installs__c', 'In_App_Purchases__c', 'Active_Users__c', 'Session_Length__c', 'Event_Count__c'],
+  'Marketing_Attribution__dlm': ['Attributed_Revenue__c', 'Attributed_Conversions__c', 'Touch_Points__c', 'Attribution_Weight__c', 'Channel_Contribution__c'],
+  'Customer_Lifetime_Value__dlm': ['CLV__c', 'Predicted_CLV__c', 'Historical_CLV__c', 'Average_CLV__c', 'CLV_Segment__c'],
+};
+
+const DMO_FIELDS_DEFAULT = ['Amount__c', 'Count__c', 'Value__c', 'Total__c', 'Revenue__c'];
+
+// --- Searchable Select Component ---
+function SearchableSelect({ placeholder, value, options, onChange }) {
+  const [search, setSearch] = useState('');
+  const [isOpen, setIsOpen] = useState(false);
+
+  const filtered = options.filter((opt) =>
+    opt.toLowerCase().includes(search.toLowerCase())
+  );
+
+  const displayValue = value || '';
+
+  return (
+    <div style={{ position: 'relative' }}>
+      <input
+        className="cosmos-input"
+        placeholder={placeholder}
+        value={isOpen ? search : displayValue}
+        onChange={(e) => { setSearch(e.target.value); if (!isOpen) setIsOpen(true); }}
+        onFocus={() => { setIsOpen(true); setSearch(''); }}
+        onBlur={() => setTimeout(() => setIsOpen(false), 200)}
+        style={{ paddingRight: '32px' }}
+      />
+      <svg
+        width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#747474" strokeWidth="2"
+        style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }}
+      >
+        <path d="M6 9l6 6 6-6" />
+      </svg>
+      {isOpen && (
+        <div style={{
+          position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 50,
+          background: 'var(--cosmos-neutral-100, #fff)', border: '1px solid var(--cosmos-border, #e5e5e5)',
+          borderRadius: 'var(--cosmos-radius-sm, 4px)', boxShadow: 'var(--cosmos-shadow-lg)',
+          maxHeight: 200, overflowY: 'auto', marginTop: 4,
+        }}>
+          {filtered.length === 0 && (
+            <div style={{ padding: '8px 12px', fontSize: 13, color: 'var(--cosmos-neutral-50)' }}>No results found</div>
+          )}
+          {filtered.map((opt) => (
+            <div
+              key={opt}
+              style={{
+                padding: '8px 12px', fontSize: 13, cursor: 'pointer',
+                background: opt === value ? 'var(--cosmos-info-light, #eaf5fe)' : 'transparent',
+                fontWeight: opt === value ? 600 : 400,
+              }}
+              onMouseDown={(e) => { e.preventDefault(); onChange(opt); setIsOpen(false); setSearch(''); }}
+              onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--cosmos-neutral-95, #f3f3f3)'; }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = opt === value ? 'var(--cosmos-info-light, #eaf5fe)' : 'transparent'; }}
+            >
+              {opt}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function ConfigPage() {
   const { state, dispatch } = useApp();
   const { config, mtaMMMSync, trainingStatus } = state;
@@ -512,17 +608,50 @@ export default function ConfigPage() {
                           <tbody>
                             {Object.keys(totalConnectEnabled).filter(k => totalConnectEnabled[k]).map((id) => {
                               const name = id.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
-                              const isTV = id.includes('tv');
-                              const isRadio = id.includes('radio');
-                              const isOOH = id.includes('ooh');
-                              const activityOptions = isTV
-                                ? ['GRPs', 'Impressions', 'Reach', 'TRPs']
-                                : isRadio
-                                ? ['GRPs', 'Impressions', 'Reach', 'Listeners']
+                              const isLinearTV = id.includes('tv_linear');
+                              const isStreamingTV = id.includes('tv_streaming');
+                              const isRadioStream = id.includes('radio_streaming');
+                              const isRadioTrad = id.includes('radio') && !id.includes('streaming');
+                              const isOOHDigital = id === 'ooh_digital';
+                              const isOOH = id.includes('ooh') && !isOOHDigital;
+                              const isPrint = id.includes('print');
+                              const isCinema = id === 'cinema';
+
+                              const activityOptions = isLinearTV
+                                ? ['TV Gross Rating Points (GRPs)', 'TV Target Rating Points (TRPs)', 'TV Impressions', 'TV Reach', 'TV Frequency', 'TV Spot Count']
+                                : isStreamingTV
+                                ? ['CTV Impressions', 'CTV Completed Views', 'CTV Video Completion Rate', 'CTV Reach', 'CTV Frequency', 'CTV Clicks']
+                                : isRadioStream
+                                ? ['Audio Impressions', 'Audio Listens (30s+)', 'Audio Completion Rate', 'Audio Reach', 'Audio Frequency', 'Audio Clicks']
+                                : isRadioTrad
+                                ? ['Radio Gross Impressions', 'Radio Spots Aired', 'Radio GRPs', 'Radio Reach', 'Radio Frequency']
+                                : isOOHDigital
+                                ? ['DOOH Impressions', 'DOOH Plays', 'DOOH Share of Voice', 'DOOH Reach', 'DOOH Frequency', 'DOOH Dwell Time (avg sec)']
                                 : isOOH
-                                ? ['Impressions', 'Reach', 'Panels']
+                                ? ['Transit Impressions', 'Transit Panels', 'Transit Reach', 'Transit Frequency']
+                                : isPrint
+                                ? ['Print Circulation', 'Print Readership', 'Print Page Views', 'Print Ad Insertions']
+                                : isCinema
+                                ? ['Cinema Impressions', 'Cinema Admissions', 'Cinema Screen Count', 'Cinema Reach']
                                 : ['Impressions', 'Reach', 'GRPs'];
-                              const costOptions = ['Spend ($)', 'CPM', 'CPP (Cost Per Point)', 'Total Invoice'];
+
+                              const costOptions = isLinearTV
+                                ? ['TV Net Spend', 'TV Gross Spend', 'TV CPP (Cost Per Point)', 'TV CPM (Cost Per Mille)']
+                                : isStreamingTV
+                                ? ['CTV Net Spend', 'CTV Gross Spend', 'CTV CPM', 'CTV CPCV (Cost Per Completed View)']
+                                : isRadioStream
+                                ? ['Audio Net Spend', 'Audio Gross Spend', 'Audio CPM', 'Audio CTR']
+                                : isRadioTrad
+                                ? ['Radio Net Spend', 'Radio Gross Spend', 'Radio CPP', 'Radio CPM']
+                                : isOOHDigital
+                                ? ['DOOH Net Spend', 'DOOH Gross Spend', 'DOOH CPM']
+                                : isOOH
+                                ? ['Transit Net Spend', 'Transit Gross Spend', 'Transit CPM']
+                                : isPrint
+                                ? ['Print Gross Spend', 'Print Net Spend', 'Print CPM', 'Print Response Rate']
+                                : isCinema
+                                ? ['Cinema Net Spend', 'Cinema Gross Spend', 'Cinema CPM', 'Cinema Cost Per Admission']
+                                : ['Net Spend', 'Gross Spend', 'CPM'];
                               return (
                                 <tr key={id}>
                                   <td style={{ fontWeight: 600, fontSize: 12 }}>{name}</td>
@@ -599,30 +728,26 @@ export default function ConfigPage() {
                   Data Model Object (DMO) Configuration
                 </h4>
                 <p className="cosmos-text-sm cosmos-text-muted" style={{ marginBottom: '16px' }}>
-                  Configure the Data Cloud object and field that contains your {config.kpiType === 'revenue' ? 'revenue' : 'conversion'} data.
+                  Select the Data Cloud object and field that contains your {config.kpiType === 'revenue' ? 'revenue' : 'conversion'} data.
                 </p>
 
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
                   <div className="cosmos-form-group">
-                    <label className="cosmos-label">DMO Object Name</label>
-                    <input
-                      className="cosmos-input"
-                      placeholder={config.kpiType === 'revenue' ? 'e.g. Revenue__dlm' : 'e.g. Conversion_Event__dlm'}
+                    <label className="cosmos-label">DMO Object</label>
+                    <SearchableSelect
+                      placeholder="Search objects..."
                       value={config.kpiDMO.objectName}
-                      onChange={(e) =>
-                        updateConfig({ kpiDMO: { ...config.kpiDMO, objectName: e.target.value } })
-                      }
+                      options={DMO_OBJECTS}
+                      onChange={(val) => updateConfig({ kpiDMO: { ...config.kpiDMO, objectName: val, fieldName: '' } })}
                     />
                   </div>
                   <div className="cosmos-form-group">
-                    <label className="cosmos-label">DMO Field Name</label>
-                    <input
-                      className="cosmos-input"
-                      placeholder={config.kpiType === 'revenue' ? 'e.g. Total_Revenue__c' : 'e.g. Conversion_Count__c'}
+                    <label className="cosmos-label">DMO Field</label>
+                    <SearchableSelect
+                      placeholder="Search fields..."
                       value={config.kpiDMO.fieldName}
-                      onChange={(e) =>
-                        updateConfig({ kpiDMO: { ...config.kpiDMO, fieldName: e.target.value } })
-                      }
+                      options={DMO_FIELDS[config.kpiDMO.objectName] || DMO_FIELDS_DEFAULT}
+                      onChange={(val) => updateConfig({ kpiDMO: { ...config.kpiDMO, fieldName: val } })}
                     />
                   </div>
                 </div>
