@@ -909,3 +909,15 @@ body {
 .cosmos-text-error { color: var(--cosmos-error); }
 .cosmos-text-bold { font-weight: 700; }
 .cosmos-truncate { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ═══════════════════════════════════════════ */
+/* RECHARTS ERROR BARS                         */
+/* recharts 3 sets stroke/stroke-width on the  */
+/* <g> group, but the child <line> elements do */
+/* not inherit it, so whiskers render invisible.*/
+/* Force the lines to inherit the group stroke. */
+/* ═══════════════════════════════════════════ */
+.recharts-errorBar line {
+  stroke: inherit;
+  stroke-width: inherit;
+}
