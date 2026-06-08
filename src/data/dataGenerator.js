@@ -579,3 +579,160 @@ export function generateMTAResults(channelNames, modelType = 'linear', lookbackW
     lookbackWindow,
   };
 }
+
+// --- Collinearity detection & MTA-prior identification demo ---
+//
+// Why this exists: an MMM identifies a channel's individual ROI by observing
+// the KPI move when that channel's spend moves *independently* of the others.
+// When two channels rise and fall together (collinear), the aggregate data can
+// only identify their COMBINED effect, not the split between them. MTA, which
+// works on user-level paths, can see the split because at the person level the
+// channels are separable. Feeding MTA's split in as informative priors lets the
+// MMM resolve the individual ROIs: the data pins the sum, the prior pins the split.
+
+function pearson(a, b) {
+  const n = Math.min(a.length, b.length);
+  if (n < 2) return 0;
+  let sa = 0, sb = 0;
+  for (let i = 0; i < n; i++) { sa += a[i]; sb += b[i]; }
+  const ma = sa / n, mb = sb / n;
+  let cov = 0, va = 0, vb = 0;
+  for (let i = 0; i < n; i++) {
+    const da = a[i] - ma, db = b[i] - mb;
+    cov += da * db; va += da * da; vb += db * db;
+  }
+  if (va === 0 || vb === 0) return 0;
+  return cov / Math.sqrt(va * vb);
+}
+
+// Build per-channel weekly total-spend series from pipeline rows, then compute
+// pairwise spend correlation and an approximate VIF for each channel.
+// VIF_j = 1 / (1 - R²_j); we approximate R²_j with the max pairwise r² (the
+// strongest single collinearity), which is enough to flag the problem clearly.
+export function detectCollinearity(pipelineData, threshold = 0.8) {
+  const rows = pipelineData?.rows || [];
+  if (!rows.length) return { channels: [], pairs: [], hasCollinearity: false };
+
+  // Aggregate spend by channel -> week
+  const byChannel = {};
+  const weekSet = new Set();
+  for (const r of rows) {
+    const ch = r.channelName || r.channel;
+    const wk = r.week || r.date;
+    const spend = Number(r.spend) || 0;
+    if (!ch || !wk) continue;
+    weekSet.add(wk);
+    byChannel[ch] = byChannel[ch] || {};
+    byChannel[ch][wk] = (byChannel[ch][wk] || 0) + spend;
+  }
+  const weeks = [...weekSet].sort();
+  const channelNames = Object.keys(byChannel);
+  if (channelNames.length < 2 || weeks.length < 2) {
+    return { channels: [], pairs: [], hasCollinearity: false };
+  }
+
+  // Dense series aligned on the week axis
+  const series = {};
+  for (const ch of channelNames) {
+    series[ch] = weeks.map((w) => byChannel[ch][w] || 0);
+  }
+
+  // Pairwise correlations
+  const pairs = [];
+  for (let i = 0; i < channelNames.length; i++) {
+    for (let j = i + 1; j < channelNames.length; j++) {
+      const r = pearson(series[channelNames[i]], series[channelNames[j]]);
+      pairs.push({ a: channelNames[i], b: channelNames[j], r: Math.round(r * 1000) / 1000 });
+    }
+  }
+  pairs.sort((p, q) => Math.abs(q.r) - Math.abs(p.r));
+
+  // Per-channel approximate VIF from strongest pairwise r
+  const channels = channelNames.map((ch) => {
+    let maxR2 = 0;
+    for (const p of pairs) {
+      if (p.a === ch || p.b === ch) maxR2 = Math.max(maxR2, p.r * p.r);
+    }
+    const vif = maxR2 >= 0.999 ? 999 : Math.round((1 / (1 - maxR2)) * 10) / 10;
+    return { channel: ch, maxCorr: Math.round(Math.sqrt(maxR2) * 1000) / 1000, vif };
+  });
+  channels.sort((a, b) => b.vif - a.vif);
+
+  const hasCollinearity = pairs.some((p) => Math.abs(p.r) >= threshold);
+  return { channels, pairs, hasCollinearity, threshold, weeksUsed: weeks.length };
+}
+
+// For the most-collinear pair, produce the "before vs after MTA priors" ROI
+// credible intervals. BEFORE: the data identifies the pair's COMBINED ROI well
+// but not the split, so each channel gets a wide interval centered near the
+// midpoint (the model is guessing the split). AFTER: MTA supplies the split,
+// so each channel's interval is narrow and separated, while the two posterior
+// means still sum to the same well-identified combined effect.
+export function buildIdentificationDemo(pipelineData, mtaResults, threshold = 0.8) {
+  const collinearity = detectCollinearity(pipelineData, threshold);
+  const top = collinearity.pairs[0];
+  if (!top || Math.abs(top.r) < threshold) return null;
+
+  const chA = top.a;
+  const chB = top.b;
+
+  // Combined ROI is well-identified by the data. Derive a stable value from the
+  // channels' avgROI when available, else a sensible default.
+  const findROI = (name) => {
+    const c = (pipelineData?.channels || []).find(
+      (x) => x.name === name || x.channelName === name || x.key === name
+    );
+    return c?.avgROI || c?.effectiveROI || null;
+  };
+  const baseA = findROI(chA) || 2.4;
+  const baseB = findROI(chB) || 1.6;
+  const combined = Math.round((baseA + baseB) * 100) / 100; // well-identified sum
+
+  // MTA split: prefer real MTA contribution shares for these channels if present.
+  const mtaFor = (name) =>
+    (mtaResults?.channels || []).find((m) => m.name === name || m.channel === name);
+  const mtaA = mtaFor(chA);
+  const mtaB = mtaFor(chB);
+  let shareA;
+  if (mtaA && mtaB && (mtaA.contribution + mtaB.contribution) > 0) {
+    shareA = mtaA.contribution / (mtaA.contribution + mtaB.contribution);
+  } else {
+    shareA = baseA / (baseA + baseB); // fall back to the underlying truth
+  }
+  const shareB = 1 - shareA;
+
+  // BEFORE: data can't split -> wide, overlapping intervals centered near the
+  // midpoint of the combined effect (model has no information about the split).
+  const mid = combined / 2;
+  const wide = combined * 0.42; // large uncertainty on each individual channel
+  const before = [
+    { channel: chA, roi: round2(mid), lower: round2(Math.max(0, mid - wide)), upper: round2(mid + wide) },
+    { channel: chB, roi: round2(mid), lower: round2(Math.max(0, mid - wide)), upper: round2(mid + wide) },
+  ];
+
+  // AFTER: MTA pins the split -> narrow, separated intervals whose means sum to
+  // the same combined effect.
+  const meanA = combined * shareA;
+  const meanB = combined * shareB;
+  const narrow = combined * 0.08;
+  const after = [
+    { channel: chA, roi: round2(meanA), lower: round2(Math.max(0, meanA - narrow)), upper: round2(meanA + narrow) },
+    { channel: chB, roi: round2(meanB), lower: round2(Math.max(0, meanB - narrow)), upper: round2(meanB + narrow) },
+  ];
+
+  return {
+    pair: { a: chA, b: chB, r: top.r },
+    vif: collinearity.channels.find((c) => c.channel === chA)?.vif,
+    combined,
+    split: { a: round2(shareA), b: round2(shareB) },
+    mtaDriven: !!(mtaA && mtaB),
+    before,
+    after,
+    ciBeforeWidth: round2(wide * 2),
+    ciAfterWidth: round2(narrow * 2),
+  };
+}
+
+function round2(x) {
+  return Math.round(x * 100) / 100;
+}
