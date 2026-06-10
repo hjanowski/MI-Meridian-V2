@@ -23,20 +23,22 @@ import {
   MapPin,
   Film,
   Unlink,
+  ShieldCheck,
+  Route,
+  Sparkles,
 } from 'lucide-react';
 import {
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
+  LineChart,
+  Line,
   ResponsiveContainer,
-  Cell,
-  ErrorBar,
 } from 'recharts';
 
 const IDENT_COLORS = ['#0176D3', '#2E844A', '#FE9339', '#9050E9', '#04844B', '#3296ED'];
+
+// MTA-prior confidence → Meridian prior std. Tighter std = Meridian starts more
+// certain. PRIOR_DEFAULT_STD is the vague, uninformed prior we improve on.
+const PRIOR_DEFAULT_STD = 1.2;
+const STD_BY_CONFIDENCE = { High: 0.4, Medium: 0.7, Low: 1.0 };
 
 // --- SVG Logo Components ---
 const MetaLogo = () => (
@@ -237,20 +239,76 @@ export default function ConfigPage() {
     return buildIdentificationDemo(state.pipelineData, state.mtaConfig?.results, 0.8);
   }, [state.pipelineData, state.mtaConfig?.results]);
 
-  const identChartData = useMemo(() => {
-    if (!identification) return [];
-    const r2 = (x) => Math.round(x * 100) / 100;
-    return identification.before.map((b, i) => {
-      const a = identification.after[i];
-      return {
-        channel: b.channel,
-        beforeRoi: b.roi,
-        beforeErr: [r2(b.roi - b.lower), r2(b.upper - b.roi)],
-        afterRoi: a.roi,
-        afterErr: [r2(a.roi - a.lower), r2(a.upper - a.roi)],
-      };
-    });
+  // ---- MTA-insight cards (shown when "pull MTA priors" is on) ----------------
+  // All three derive from MTA, which sees user-level journeys Meridian can't.
+  // Series are deterministic (layered sines, no Math.random) so the demo is stable.
+
+  // The two channels Meridian struggles to separate (falls back to a sensible
+  // default pair when no collinear pair is detected in the pipeline data).
+  const lockPair = useMemo(() => {
+    if (identification?.pair) return [identification.pair.a, identification.pair.b];
+    return ['Meta Ads', 'Google Ads'];
   }, [identification]);
+
+  const lockCorr = identification?.pair?.r ?? 0.91;
+
+  // Card 1 — Channel Lock-step Activity. "Current": the two channels move in
+  // near-lock-step (Meridian can't tell them apart). "MTA-based": user-level
+  // paths reveal each channel's own distinct rhythm.
+  const lockstepData = useMemo(() => {
+    const N = 26;
+    const wiggle = (t, { phase, amp, freq, drift }) =>
+      Math.round((58 + amp * Math.sin(t * freq + phase) + 6 * Math.sin(t * 0.33 + phase * 1.6) + (drift * t) / N) * 10) / 10;
+    // Current: shared phase/freq → the lines overlap.
+    const curA = { phase: 0.0, amp: 17, freq: 0.46, drift: 5 };
+    const curB = { phase: 0.18, amp: 16, freq: 0.46, drift: 5 };
+    // MTA-based: distinct phase/freq/drift → the lines separate.
+    const mtaA = { phase: 0.2, amp: 20, freq: 0.46, drift: 2 };
+    const mtaB = { phase: 2.7, amp: 14, freq: 0.37, drift: -4 };
+    return Array.from({ length: N }, (_, t) => ({
+      t,
+      curA: wiggle(t, curA),
+      curB: wiggle(t, curB),
+      mtaA: wiggle(t, mtaA),
+      mtaB: wiggle(t, mtaB),
+    }));
+  }, []);
+
+  // Card 2 — ROI Confidence. MTA gives each channel an ROI anchor; its
+  // confidence sets how tight the Meridian prior is (high confidence → narrow
+  // prior std → Meridian starts far more certain). Honest, computed headline.
+  const confidenceRows = useMemo(() => {
+    const rows = [
+      { channel: 'Google Ads', mtaROI: 2.8, confidence: 'High' },
+      { channel: 'Meta Ads', mtaROI: 1.9, confidence: 'High' },
+      { channel: 'Amazon Ads', mtaROI: 2.1, confidence: 'High' },
+      { channel: 'YouTube Ads', mtaROI: 1.8, confidence: 'Medium' },
+      { channel: 'LinkedIn Ads', mtaROI: 1.6, confidence: 'Medium' },
+      { channel: 'TikTok Ads', mtaROI: 1.2, confidence: 'Low' },
+    ];
+    return rows.map((r) => {
+      const std = STD_BY_CONFIDENCE[r.confidence];
+      return { ...r, std, certaintyPct: Math.round((1 - std / PRIOR_DEFAULT_STD) * 100) };
+    });
+  }, []);
+  const confidenceHeadline = useMemo(() => {
+    const meanStd = confidenceRows.reduce((s, r) => s + r.std, 0) / confidenceRows.length;
+    return Math.round((1 - meanStd / PRIOR_DEFAULT_STD) * 100); // avg uncertainty reduction
+  }, [confidenceRows]);
+
+  // Card 3 — Customer Journey. The thing only MTA can see: the sequence of
+  // touches. Upper-funnel channels assist; closers convert. Keeps Meridian
+  // from zeroing out an assisting channel.
+  const journey = { assist: lockPair[0], close: lockPair[1], assistPct: 38 };
+
+  const [priorsApplied, setPriorsApplied] = useState(false);
+  const handleApplyMTAPriors = () => {
+    setPriorsApplied(true);
+    dispatch({
+      type: 'UPDATE_MTA_MMM_SYNC',
+      payload: { mtaToMMM: true, lastSyncDate: new Date().toISOString() },
+    });
+  };
 
   const [currentPart, setCurrentPart] = useState(1);
   const [excludedPipelines, setExcludedPipelines] = useState({});
@@ -892,7 +950,7 @@ export default function ConfigPage() {
 
                 {config.useMTAPriors && (
                   <div style={{ marginTop: '16px' }}>
-                    <div className="cosmos-form-group">
+                    <div className="cosmos-form-group" style={{ maxWidth: '420px' }}>
                       <label className="cosmos-label">Select MTA Model</label>
                       <select className="cosmos-select">
                         <option value="data_driven">Data-Driven Attribution (Default)</option>
@@ -900,132 +958,157 @@ export default function ConfigPage() {
                         <option value="time_decay">Time Decay</option>
                         <option value="linear">Linear</option>
                       </select>
-                      <p className="cosmos-help-text">Channels with high MTA ROI will receive tighter prior distributions, guiding Meridian toward those estimates.</p>
+                      <p className="cosmos-help-text">Three insights from your MTA model, used to set Meridian&apos;s Bayesian priors.</p>
                     </div>
 
-                    <table className="cosmos-table" style={{ marginTop: '12px' }}>
-                      <thead>
-                        <tr>
-                          <th>Channel</th>
-                          <th>MTA ROI</th>
-                          <th>Prior Mean (log)</th>
-                          <th>Prior Std</th>
-                          <th>Confidence</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {[
-                          { channel: 'Google Ads', mtaROI: 2.8, confidence: 'High' },
-                          { channel: 'Meta Ads', mtaROI: 1.9, confidence: 'High' },
-                          { channel: 'YouTube Ads', mtaROI: 1.8, confidence: 'Medium' },
-                          { channel: 'LinkedIn Ads', mtaROI: 1.6, confidence: 'Medium' },
-                          { channel: 'TikTok Ads', mtaROI: 1.2, confidence: 'Low' },
-                          { channel: 'Amazon Ads', mtaROI: 2.1, confidence: 'High' },
-                        ].map((row) => (
-                          <tr key={row.channel}>
-                            <td style={{ fontWeight: 600 }}>{row.channel}</td>
-                            <td>{row.mtaROI.toFixed(2)}</td>
-                            <td>{Math.log(row.mtaROI).toFixed(3)}</td>
-                            <td>{row.confidence === 'High' ? '0.4' : row.confidence === 'Medium' ? '0.7' : '1.0'}</td>
-                            <td>
-                              <span className={`cosmos-badge cosmos-badge--${row.confidence === 'High' ? 'success' : row.confidence === 'Medium' ? 'warning' : 'neutral'}`}>
-                                {row.confidence}
-                              </span>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                    {/* Three MTA-insight cards */}
+                    <div
+                      style={{
+                        display: 'grid',
+                        gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
+                        gap: '16px',
+                        marginTop: '16px',
+                      }}
+                    >
+                      {/* CARD 1 — Channel Lock-step Activity */}
+                      <div className="cosmos-card" style={{ display: 'flex', flexDirection: 'column' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '2px' }}>
+                          <Unlink size={15} color="var(--cosmos-brand)" />
+                          <span className="cosmos-text-xs cosmos-text-bold" style={{ textTransform: 'uppercase', letterSpacing: '0.4px', color: 'var(--cosmos-neutral-50)' }}>
+                            Channel Separation
+                          </span>
+                        </div>
+                        <p className="cosmos-help-text" style={{ margin: '0 0 10px' }}>
+                          <strong>{lockPair[0]}</strong> &amp; <strong>{lockPair[1]}</strong> move in
+                          lock-step — Meridian can&apos;t tell them apart. MTA reveals each channel&apos;s
+                          own rhythm.
+                        </p>
+
+                        <div style={{ marginBottom: '2px' }}>
+                          <span className="cosmos-text-xs cosmos-text-muted">Current — spend moves together</span>
+                          <ResponsiveContainer width="100%" height={66}>
+                            <LineChart data={lockstepData} margin={{ top: 6, right: 6, left: 6, bottom: 0 }}>
+                              <Line type="monotone" dataKey="curA" stroke={IDENT_COLORS[0]} strokeWidth={2} dot={false} isAnimationActive={false} />
+                              <Line type="monotone" dataKey="curB" stroke={IDENT_COLORS[1]} strokeWidth={2} dot={false} isAnimationActive={false} />
+                            </LineChart>
+                          </ResponsiveContainer>
+                        </div>
+                        <div>
+                          <span className="cosmos-text-xs cosmos-text-muted">MTA-based — distinct patterns</span>
+                          <ResponsiveContainer width="100%" height={66}>
+                            <LineChart data={lockstepData} margin={{ top: 6, right: 6, left: 6, bottom: 0 }}>
+                              <Line type="monotone" dataKey="mtaA" stroke={IDENT_COLORS[0]} strokeWidth={2} dot={false} isAnimationActive={false} />
+                              <Line type="monotone" dataKey="mtaB" stroke={IDENT_COLORS[1]} strokeWidth={2} dot={false} isAnimationActive={false} />
+                            </LineChart>
+                          </ResponsiveContainer>
+                        </div>
+
+                        <div style={{ marginTop: 'auto', paddingTop: '10px' }}>
+                          <span className="cosmos-badge cosmos-badge--info">{Math.round(Math.abs(lockCorr) * 100)}% correlated → separated</span>
+                        </div>
+                      </div>
+
+                      {/* CARD 2 — ROI Confidence */}
+                      <div className="cosmos-card" style={{ display: 'flex', flexDirection: 'column' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '2px' }}>
+                          <ShieldCheck size={15} color="var(--cosmos-brand)" />
+                          <span className="cosmos-text-xs cosmos-text-bold" style={{ textTransform: 'uppercase', letterSpacing: '0.4px', color: 'var(--cosmos-neutral-50)' }}>
+                            ROI Confidence
+                          </span>
+                        </div>
+                        <p className="cosmos-help-text" style={{ margin: '0 0 10px' }}>
+                          MTA gives each channel an ROI anchor — and how hard to trust it. High
+                          confidence tightens Meridian&apos;s prior.
+                        </p>
+
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '7px' }}>
+                          {confidenceRows.map((row) => {
+                            const variant = row.confidence === 'High' ? 'success' : row.confidence === 'Medium' ? 'warning' : 'neutral';
+                            const barColor = row.confidence === 'High' ? 'var(--cosmos-success)' : row.confidence === 'Medium' ? 'var(--cosmos-warning)' : 'var(--cosmos-neutral-60)';
+                            return (
+                              <div key={row.channel} style={{ display: 'grid', gridTemplateColumns: '92px 1fr 34px', alignItems: 'center', gap: '8px' }}>
+                                <span className="cosmos-text-xs" style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{row.channel}</span>
+                                <div style={{ height: 7, borderRadius: 'var(--cosmos-radius-pill)', background: 'var(--cosmos-neutral-90)', overflow: 'hidden' }}>
+                                  <div style={{ width: `${row.certaintyPct}%`, height: '100%', background: barColor, borderRadius: 'var(--cosmos-radius-pill)' }} />
+                                </div>
+                                <span className="cosmos-text-xs cosmos-text-bold" style={{ color: `var(--cosmos-${variant === 'neutral' ? 'neutral-50' : variant})`, textAlign: 'right' }}>
+                                  {row.mtaROI.toFixed(1)}x
+                                </span>
+                              </div>
+                            );
+                          })}
+                        </div>
+
+                        <div style={{ marginTop: 'auto', paddingTop: '10px' }}>
+                          <span className="cosmos-badge cosmos-badge--success">Meridian starts {confidenceHeadline}% more certain</span>
+                        </div>
+                      </div>
+
+                      {/* CARD 3 — Customer Journey */}
+                      <div className="cosmos-card" style={{ display: 'flex', flexDirection: 'column' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '2px' }}>
+                          <Route size={15} color="var(--cosmos-brand)" />
+                          <span className="cosmos-text-xs cosmos-text-bold" style={{ textTransform: 'uppercase', letterSpacing: '0.4px', color: 'var(--cosmos-neutral-50)' }}>
+                            Customer Journey
+                          </span>
+                        </div>
+                        <p className="cosmos-help-text" style={{ margin: '0 0 14px' }}>
+                          MTA sees the order of touches — what Meridian can&apos;t. Upper-funnel
+                          channels assist the win.
+                        </p>
+
+                        {/* assist → close → convert flow */}
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', padding: '10px 0 14px' }}>
+                          <div style={{ textAlign: 'center' }}>
+                            <div style={{ width: 52, height: 52, borderRadius: '50%', background: 'var(--cosmos-brand-light)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto' }}>
+                              <span className="cosmos-text-xs cosmos-text-bold" style={{ color: 'var(--cosmos-brand)' }}>Assist</span>
+                            </div>
+                            <span className="cosmos-text-xs cosmos-text-muted" style={{ display: 'block', marginTop: 4 }}>{journey.assist}</span>
+                          </div>
+                          <ArrowRight size={16} color="var(--cosmos-neutral-60)" style={{ flexShrink: 0, marginBottom: 18 }} />
+                          <div style={{ textAlign: 'center' }}>
+                            <div style={{ width: 52, height: 52, borderRadius: '50%', background: 'var(--cosmos-brand-light)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto' }}>
+                              <span className="cosmos-text-xs cosmos-text-bold" style={{ color: 'var(--cosmos-brand)' }}>Close</span>
+                            </div>
+                            <span className="cosmos-text-xs cosmos-text-muted" style={{ display: 'block', marginTop: 4 }}>{journey.close}</span>
+                          </div>
+                          <ArrowRight size={16} color="var(--cosmos-neutral-60)" style={{ flexShrink: 0, marginBottom: 18 }} />
+                          <div style={{ textAlign: 'center' }}>
+                            <div style={{ width: 52, height: 52, borderRadius: '50%', background: 'var(--cosmos-success-light)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto' }}>
+                              <CheckCircle size={22} color="var(--cosmos-success)" />
+                            </div>
+                            <span className="cosmos-text-xs cosmos-text-muted" style={{ display: 'block', marginTop: 4 }}>Convert</span>
+                          </div>
+                        </div>
+
+                        <div style={{ marginTop: 'auto' }}>
+                          <span className="cosmos-badge cosmos-badge--info">{journey.assistPct}% of wins are assisted</span>
+                          <p className="cosmos-help-text" style={{ margin: '8px 0 0' }}>
+                            Keeps Meridian from zeroing out {journey.assist}.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Single apply CTA */}
+                    <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: '12px', marginTop: '16px' }}>
+                      {priorsApplied && (
+                        <span className="cosmos-text-sm" style={{ color: 'var(--cosmos-success)', display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                          <CheckCircle size={15} /> Applied to Meridian priors
+                        </span>
+                      )}
+                      <button
+                        className={`cosmos-btn ${priorsApplied ? 'cosmos-btn--success' : 'cosmos-btn--brand'}`}
+                        onClick={handleApplyMTAPriors}
+                        disabled={priorsApplied}
+                      >
+                        <Sparkles size={16} />
+                        {priorsApplied ? 'MTA Insights Applied' : 'Apply MTA Insights to Priors'}
+                      </button>
+                    </div>
                   </div>
                 )}
               </div>
-
-              {/* Why priors help: collinearity resolution (the "killer use-case") */}
-              {config.useMTAPriors && identification && (
-                <div style={{ border: '1px solid var(--cosmos-border)', borderRadius: 'var(--cosmos-radius-md, 8px)', padding: '20px' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
-                    <Unlink size={16} />
-                    <h4 style={{ margin: 0, fontSize: '14px', fontWeight: 700 }}>Why this helps: resolving channels Meridian can&apos;t separate</h4>
-                  </div>
-                  <p className="cosmos-text-sm cosmos-text-muted" style={{ margin: '4px 0 16px' }}>
-                    When two channels move together in your spend data, Meridian can measure their
-                    combined ROI but not the split between them. MTA estimates the split from
-                    user-level paths.
-                  </p>
-
-                  <div
-                    className="cosmos-alert cosmos-alert--warning"
-                    style={{ display: 'flex', alignItems: 'flex-start', gap: '0.75rem', marginBottom: '12px' }}
-                  >
-                    <AlertTriangle size={18} style={{ flexShrink: 0, marginTop: '2px' }} />
-                    <div className="cosmos-text-sm">
-                      <strong>{identification.pair.a}</strong> and <strong>{identification.pair.b}</strong>{' '}
-                      move together (correlation r = {identification.pair.r}
-                      {identification.vif ? `, VIF ≈ ${identification.vif}` : ''}). Meridian can
-                      measure their <em>combined</em> ROI (~{identification.combined}x) but not which
-                      channel earned it — so each channel&apos;s individual ROI is highly uncertain.
-                    </div>
-                  </div>
-
-                  <div
-                    style={{
-                      display: 'grid',
-                      gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
-                      gap: '16px',
-                    }}
-                  >
-                    {/* BEFORE */}
-                    <div className="cosmos-card">
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
-                        <span className="cosmos-text-sm cosmos-text-bold">Before: Meridian alone</span>
-                        <span className="cosmos-badge cosmos-badge--error">±{identification.ciBeforeWidth} CI</span>
-                      </div>
-                      <p className="cosmos-help-text" style={{ marginTop: 0 }}>Wide, overlapping — the split is a guess.</p>
-                      <ResponsiveContainer width="100%" height={240}>
-                        <BarChart data={identChartData} margin={{ top: 16, right: 16, left: 0, bottom: 5 }}>
-                          <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                          <XAxis dataKey="channel" fontSize={12} />
-                          <YAxis label={{ value: 'ROI (x)', angle: -90, position: 'insideLeft' }} domain={[0, 'auto']} fontSize={12} />
-                          <Tooltip formatter={(v) => `${v}x`} />
-                          <Bar dataKey="beforeRoi" name="Estimated ROI" fill="#BA0517" radius={[4, 4, 0, 0]} maxBarSize={64}>
-                            <ErrorBar dataKey="beforeErr" width={6} strokeWidth={2} stroke="#5c0a10" direction="y" isAnimationActive={false} />
-                          </Bar>
-                        </BarChart>
-                      </ResponsiveContainer>
-                    </div>
-
-                    {/* AFTER */}
-                    <div className="cosmos-card">
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
-                        <span className="cosmos-text-sm cosmos-text-bold">After: with MTA priors</span>
-                        <span className="cosmos-badge cosmos-badge--success">±{identification.ciAfterWidth} CI</span>
-                      </div>
-                      <p className="cosmos-help-text" style={{ marginTop: 0 }}>Narrow, separated — the split is resolved.</p>
-                      <ResponsiveContainer width="100%" height={240}>
-                        <BarChart data={identChartData} margin={{ top: 16, right: 16, left: 0, bottom: 5 }}>
-                          <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                          <XAxis dataKey="channel" fontSize={12} />
-                          <YAxis label={{ value: 'ROI (x)', angle: -90, position: 'insideLeft' }} domain={[0, 'auto']} fontSize={12} />
-                          <Tooltip formatter={(v) => `${v}x`} />
-                          <Bar dataKey="afterRoi" name="Resolved ROI" radius={[4, 4, 0, 0]} maxBarSize={64}>
-                            {identChartData.map((entry, idx) => (
-                              <Cell key={idx} fill={IDENT_COLORS[idx % IDENT_COLORS.length]} />
-                            ))}
-                            <ErrorBar dataKey="afterErr" width={6} strokeWidth={2} stroke="#04321c" direction="y" isAnimationActive={false} />
-                          </Bar>
-                        </BarChart>
-                      </ResponsiveContainer>
-                    </div>
-                  </div>
-
-                  <p className="cosmos-text-sm cosmos-text-muted" style={{ marginTop: '12px', marginBottom: 0 }}>
-                    <CheckCircle size={14} style={{ display: 'inline', verticalAlign: 'middle', marginRight: '6px', color: 'var(--cosmos-success)' }} />
-                    Both channels still sum to ~{identification.combined}x — MTA didn&apos;t change
-                    how much the pair earned, only <em>who earned it</em>.
-                    {!identification.mtaDriven && ' Run an MTA model on these channels to replace the illustrative split with real attribution data.'}
-                  </p>
-                </div>
-              )}
 
               {/* Push: Meridian ROI to MTA */}
               <div style={{ border: '1px solid var(--cosmos-border)', borderRadius: 'var(--cosmos-radius-md, 8px)', padding: '20px' }}>
