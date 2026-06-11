@@ -30,10 +30,21 @@ import {
 import {
   LineChart,
   Line,
+  LabelList,
   ResponsiveContainer,
 } from 'recharts';
 
 const IDENT_COLORS = ['#0176D3', '#2E844A', '#FE9339', '#9050E9', '#04844B', '#3296ED'];
+
+// Renders a "%pt" callout at a line's peak/trough (only where value is non-null).
+function PctLabel({ x, y, value, fill, dy = -6 }) {
+  if (value == null) return null;
+  return (
+    <text x={x} y={y} dy={dy} fill={fill} fontSize={11} fontWeight={700} textAnchor="middle">
+      {Math.round(value)}%
+    </text>
+  );
+}
 
 // MTA-prior confidence → Meridian prior std. Tighter std = Meridian starts more
 // certain. PRIOR_DEFAULT_STD is the vague, uninformed prior we improve on.
@@ -252,27 +263,49 @@ export default function ConfigPage() {
 
   const lockCorr = identification?.pair?.r ?? 0.91;
 
-  // Card 1 — Channel Lock-step Activity. "Current": the two channels move in
-  // near-lock-step (Meridian can't tell them apart). "MTA-based": user-level
-  // paths reveal each channel's own distinct rhythm.
+  // Card 1 — Contribution split. The two lines are each channel's % of the
+  // pair's combined contribution (they sum to 100 at every point).
+  //   Pre-MTA  : Meridian can't separate collinear spend, so it assumes the
+  //              split is IDENTICAL — both lines sit on the ~50/50 midline.
+  //   Post-MTA : user-level paths reveal the true split (from identification),
+  //              so the lines diverge to e.g. 60/40 while still summing to 100.
+  // Peaks/troughs are labelled with their contribution percentage points.
+  const splitA = useMemo(() => {
+    const s = identification?.split?.a;
+    return s && s > 0 && s < 1 ? s : 0.6; // share for channel A post-MTA
+  }, [identification]);
+
   const lockstepData = useMemo(() => {
     const N = 26;
-    const wiggle = (t, { phase, amp, freq, drift }) =>
-      Math.round((58 + amp * Math.sin(t * freq + phase) + 6 * Math.sin(t * 0.33 + phase * 1.6) + (drift * t) / N) * 10) / 10;
-    // Current: shared phase/freq → the lines overlap.
-    const curA = { phase: 0.0, amp: 17, freq: 0.46, drift: 5 };
-    const curB = { phase: 0.18, amp: 16, freq: 0.46, drift: 5 };
-    // MTA-based: distinct phase/freq/drift → the lines separate.
-    const mtaA = { phase: 0.2, amp: 20, freq: 0.46, drift: 2 };
-    const mtaB = { phase: 2.7, amp: 14, freq: 0.37, drift: -4 };
-    return Array.from({ length: N }, (_, t) => ({
-      t,
-      curA: wiggle(t, curA),
-      curB: wiggle(t, curB),
-      mtaA: wiggle(t, mtaA),
-      mtaB: wiggle(t, mtaB),
+    // Shared seasonal shape both channels ride (this co-movement is exactly
+    // what makes them collinear). Amplitude is in contribution points.
+    const wave = (t) => 7 * Math.sin(t * 0.5 - 0.4) + 3 * Math.sin(t * 0.27 + 1.1);
+    const aPts = N - 1;
+    const meanA = Math.round(splitA * 100); // post-MTA mean for channel A
+    const rows = Array.from({ length: N }, (_, t) => {
+      const w = wave(t);
+      // Pre-MTA: both assumed identical → both on the 50/50 midline (tiny
+      // offset so the two lines are visibly stacked, not one on top of other).
+      const preA = Math.round((50 + w + 0.6) * 10) / 10;
+      const preB = Math.round((50 + w - 0.6) * 10) / 10;
+      // Post-MTA: diverge around the true split; A and B always sum to 100.
+      const postA = Math.round((meanA + w) * 10) / 10;
+      const postB = Math.round((100 - postA) * 10) / 10;
+      return { t, preA, preB, postA, postB };
+    });
+    // Tag the global peak and trough of channel A's post-MTA line for labels;
+    // mirror those same x-positions on B so the callouts line up.
+    let hi = 1, lo = 1;
+    for (let i = 1; i < aPts; i++) {
+      if (rows[i].postA > rows[hi].postA) hi = i;
+      if (rows[i].postA < rows[lo].postA) lo = i;
+    }
+    return rows.map((r, i) => ({
+      ...r,
+      postAlbl: i === hi || i === lo ? r.postA : null,
+      postBlbl: i === hi || i === lo ? r.postB : null,
     }));
-  }, []);
+  }, [splitA]);
 
   // Card 2 — ROI Confidence. MTA gives each channel an ROI anchor; its
   // confidence sets how tight the Meridian prior is (high confidence → narrow
@@ -970,41 +1003,59 @@ export default function ConfigPage() {
                         marginTop: '16px',
                       }}
                     >
-                      {/* CARD 1 — Channel Lock-step Activity */}
+                      {/* CARD 1 — Contribution split (assumed identical → differentiated) */}
                       <div className="cosmos-card" style={{ display: 'flex', flexDirection: 'column' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '2px' }}>
                           <Unlink size={15} color="var(--cosmos-brand)" />
                           <span className="cosmos-text-xs cosmos-text-bold" style={{ textTransform: 'uppercase', letterSpacing: '0.4px', color: 'var(--cosmos-neutral-50)' }}>
-                            Channel Separation
+                            Contribution Split
                           </span>
                         </div>
-                        <p className="cosmos-help-text" style={{ margin: '0 0 10px' }}>
-                          <strong>{lockPair[0]}</strong> &amp; <strong>{lockPair[1]}</strong> move in
-                          lock-step — Meridian can&apos;t tell them apart. MTA reveals each channel&apos;s
-                          own rhythm.
+                        <p className="cosmos-help-text" style={{ margin: '0 0 8px' }}>
+                          <strong>{lockPair[0]}</strong> &amp; <strong>{lockPair[1]}</strong> are{' '}
+                          {Math.round(Math.abs(lockCorr) * 100)}% lock-step in spend. Lines show each
+                          channel&apos;s share of the pair&apos;s contribution.
                         </p>
 
+                        {/* channel legend */}
+                        <div style={{ display: 'flex', gap: '14px', marginBottom: '6px' }}>
+                          <span className="cosmos-text-xs" style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
+                            <span style={{ width: 10, height: 3, borderRadius: 2, background: IDENT_COLORS[0], display: 'inline-block' }} />
+                            {lockPair[0]}
+                          </span>
+                          <span className="cosmos-text-xs" style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
+                            <span style={{ width: 10, height: 3, borderRadius: 2, background: IDENT_COLORS[1], display: 'inline-block' }} />
+                            {lockPair[1]}
+                          </span>
+                        </div>
+
                         <div style={{ marginBottom: '2px' }}>
-                          <span className="cosmos-text-xs cosmos-text-muted">Current — spend moves together</span>
-                          <ResponsiveContainer width="100%" height={66}>
-                            <LineChart data={lockstepData} margin={{ top: 6, right: 6, left: 6, bottom: 0 }}>
-                              <Line type="monotone" dataKey="curA" stroke={IDENT_COLORS[0]} strokeWidth={2} dot={false} isAnimationActive={false} />
-                              <Line type="monotone" dataKey="curB" stroke={IDENT_COLORS[1]} strokeWidth={2} dot={false} isAnimationActive={false} />
+                          <span className="cosmos-text-xs cosmos-text-muted">Pre-MTA — contribution assumed identical</span>
+                          <ResponsiveContainer width="100%" height={72}>
+                            <LineChart data={lockstepData} margin={{ top: 10, right: 10, left: 10, bottom: 0 }}>
+                              <Line type="monotone" dataKey="preA" stroke={IDENT_COLORS[0]} strokeWidth={2} dot={false} isAnimationActive={false} />
+                              <Line type="monotone" dataKey="preB" stroke={IDENT_COLORS[1]} strokeWidth={2} strokeDasharray="4 3" dot={false} isAnimationActive={false} />
                             </LineChart>
                           </ResponsiveContainer>
                         </div>
                         <div>
-                          <span className="cosmos-text-xs cosmos-text-muted">MTA-based — distinct patterns</span>
-                          <ResponsiveContainer width="100%" height={66}>
-                            <LineChart data={lockstepData} margin={{ top: 6, right: 6, left: 6, bottom: 0 }}>
-                              <Line type="monotone" dataKey="mtaA" stroke={IDENT_COLORS[0]} strokeWidth={2} dot={false} isAnimationActive={false} />
-                              <Line type="monotone" dataKey="mtaB" stroke={IDENT_COLORS[1]} strokeWidth={2} dot={false} isAnimationActive={false} />
+                          <span className="cosmos-text-xs cosmos-text-muted">Post-MTA — accurately differentiated</span>
+                          <ResponsiveContainer width="100%" height={72}>
+                            <LineChart data={lockstepData} margin={{ top: 14, right: 12, left: 12, bottom: 0 }}>
+                              <Line type="monotone" dataKey="postA" stroke={IDENT_COLORS[0]} strokeWidth={2} dot={false} isAnimationActive={false}>
+                                <LabelList dataKey="postAlbl" content={(p) => <PctLabel {...p} fill={IDENT_COLORS[0]} dy={-6} />} />
+                              </Line>
+                              <Line type="monotone" dataKey="postB" stroke={IDENT_COLORS[1]} strokeWidth={2} dot={false} isAnimationActive={false}>
+                                <LabelList dataKey="postBlbl" content={(p) => <PctLabel {...p} fill={IDENT_COLORS[1]} dy={14} />} />
+                              </Line>
                             </LineChart>
                           </ResponsiveContainer>
                         </div>
 
                         <div style={{ marginTop: 'auto', paddingTop: '10px' }}>
-                          <span className="cosmos-badge cosmos-badge--info">{Math.round(Math.abs(lockCorr) * 100)}% correlated → separated</span>
+                          <span className="cosmos-badge cosmos-badge--success">
+                            Split resolved: {Math.round(splitA * 100)}/{100 - Math.round(splitA * 100)}
+                          </span>
                         </div>
                       </div>
 
